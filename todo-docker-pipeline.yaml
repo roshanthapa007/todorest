@@ -1,0 +1,86 @@
+node {
+    stage('variables')
+    {
+ 
+sh '''echo "BUILD_NUMBER" :: $BUILD_NUMBER
+echo "BUILD_ID" :: $BUILD_ID
+echo "BUILD_DISPLAY_NAME" :: $BUILD_DISPLAY_NAME
+echo "JOB_NAME" :: $JOB_NAME
+echo "JOB_BASE_NAME" :: $JOB_BASE_NAME
+echo "BUILD_TAG" :: $BUILD_TAG
+echo "EXECUTOR_NUMBER" :: $EXECUTOR_NUMBER
+echo "NODE_NAME" :: $NODE_NAME
+echo "NODE_LABELS" :: $NODE_LABELS
+echo "WORKSPACE" :: $WORKSPACE
+echo "JENKINS_HOME" :: $JENKINS_HOME
+echo "JENKINS_URL" :: $JENKINS_URL
+echo "BUILD_URL" ::$BUILD_URL
+echo "JOB_URL" :: $JOB_URL'''
+}
+}
+
+node{
+    stage('download code'){
+        git credentialsId: 'git', url:'https://github.com/roshanthapa007/todorest/'
+    }
+    
+      stage('compile code'){
+       sh 'mvn compile'
+    }
+      stage('sonar analysis'){
+        sh 'mvn sonar:sonar -Dsonar.projectKey=cloudenabled -Dsonar.host.url=http://44.200.160.84:9000 -Dsonar.login=d0538b21667ca97cadd9a528f8b162d3b0c42f0a'
+      }
+     stage('test code'){
+       sh 'mvn test'
+    }
+    
+    stage('generate surefire report') {
+       sh 'mvn surefire-report:report'
+  }
+  
+    stage('package') {
+       sh 'mvn package'
+  }
+
+    stage('build docker image'){
+        sh 'sudo docker buildx build -t roshanthapa007/todorest:$BUILD_NUMBER.0 .'
+    }
+    
+    stage('docker login'){
+        sh 'sudo docker login -u roshanthapa007 -p roshan455'
+    }
+    
+    stage('upload image into dockerhub'){
+        sh 'sudo docker push roshanthapa007/todorest:$BUILD_NUMBER.0'
+    }
+     stage('delete container'){
+        sh 'sudo docker rm -f t1'
+    }
+    
+    stage('create container'){
+        sh 'sudo docker run -d --name t1 -p 5001:8080 roshanthapa007/todorest:$BUILD_NUMBER.0'
+    }
+    
+    stage('wait for 30s'){
+       sleep 30
+    }
+   
+     stage('check that the app is running') {
+       sh 'curl http://localhost:5001'
+     }
+      
+
+      stage('archive jar on jenkins') {
+      archiveArtifacts artifacts: 'target/todorest-0.0.1-SNAPSHOT.jar', followSymlinks: false
+     }
+     
+    stage('upload jar file to nexus') {
+    sh 'curl -v -u admin:admin123 --upload-file target/todorest-0.0.1-SNAPSHOT.jar http://3.80.1.62:8081/repository/maven-releases/todorest-roshan-$BUILD_NUMBER.jar '
+
+}
+
+  
+ 
+     
+   
+}
